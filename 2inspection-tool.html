@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RUDDERS 検品システム</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Noto+Sans+JP:wght@300;400;500;700&family=Syne:wght@700;800&display=swap');
+:root{
+  --bg:#0d0d0f;--surface:#141416;--surface2:#1c1c1f;--border:#2a2a2e;
+  --accent:#e8c87a;--accent-dim:rgba(232,200,122,0.12);--accent-dim2:rgba(232,200,122,0.06);
+  --pass:#4caf78;--pass-dim:rgba(76,175,120,0.12);
+  --fail:#e05252;--fail-dim:rgba(224,82,82,0.12);
+  --warn:#e8a84a;--warn-dim:rgba(232,168,74,0.12);
+  --blue:#4a90d9;
+  --text:#e8e8ea;--text-dim:#8a8a8f;--text-muted:#55555a;
+  --mono:'DM Mono',monospace;--sans:'Noto Sans JP',sans-serif;--syne:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;font-size:13px;line-height:1.6;}
+
+/* ── HEADER ── */
+header{border-bottom:1px solid var(--border);padding:0 28px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:rgba(13,13,15,0.93);backdrop-filter:blur(12px);z-index:100;}
+.logo{font-family:var(--syne);font-size:13px;font-weight:800;letter-spacing:0.16em;display:flex;align-items:center;gap:8px;}
+.logo em{color:var(--accent);font-style:normal;}
+.hdr-r{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;color:var(--text-muted);}
+#clock{color:var(--accent);}
+
+/* ── LAYOUT ── */
+.container{max-width:1100px;margin:0 auto;padding:28px 20px 80px;}
+.page-title{margin-bottom:22px;}
+.page-title h1{font-size:20px;font-weight:700;letter-spacing:-0.01em;margin-bottom:3px;}
+.page-title p{font-size:11px;color:var(--text-dim);font-family:var(--mono);letter-spacing:0.08em;}
+
+/* ── MODE TABS ── */
+.mode-tabs{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:24px;background:var(--surface);}
+.mode-tab{flex:1;padding:13px 10px;border:none;background:none;color:var(--text-muted);font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:6px;}
+.mode-tab:last-child{border-right:none;}
+.mode-tab.active{background:var(--accent-dim);color:var(--accent);}
+.mode-tab .tab-icon{font-size:14px;}
+.mode-panel{display:none;animation:fadeIn 0.25s ease;}
+.mode-panel.active{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── STEP TABS ── */
+.steps{display:flex;margin-bottom:22px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.step-tab{flex:1;padding:11px 12px;background:var(--surface);border:none;color:var(--text-muted);font-family:var(--mono);font-size:10px;letter-spacing:0.08em;cursor:pointer;transition:all 0.2s;border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:flex-start;gap:2px;}
+.step-tab:last-child{border-right:none;}
+.step-tab.active{background:var(--accent-dim);color:var(--accent);border-bottom:2px solid var(--accent);}
+.step-tab.done{color:var(--pass);}
+.step-tab.done .snum::after{content:' ✓';}
+.snum{font-size:9px;opacity:0.55;text-transform:uppercase;}
+.slabel{font-size:10px;text-transform:uppercase;}
+.panel{display:none;animation:fadeIn 0.25s ease;}
+.panel.active{display:block;}
+
+/* ── CARD ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:22px;margin-bottom:14px;}
+.card-title{font-size:10px;font-family:var(--mono);letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.card-title::before{content:'';display:inline-block;width:3px;height:12px;background:var(--accent);border-radius:2px;}
+
+/* ── FORM ── */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:11px;}
+.fg{display:flex;flex-direction:column;gap:5px;}
+.fg label{font-size:10px;font-family:var(--mono);letter-spacing:0.1em;color:var(--text-dim);text-transform:uppercase;}
+input[type="text"],input[type="number"],select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;transition:border-color 0.2s;width:100%;}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim);}
+select option{background:var(--surface2);}
+.tol-row{display:flex;align-items:center;gap:12px;margin-top:11px;padding:9px 13px;background:var(--accent-dim2);border:1px solid var(--border);border-radius:6px;}
+.tol-row label{font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;white-space:nowrap;}
+.tol-row input{width:82px;}
+.tol-row span{font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+
+/* ── TABLE ── */
+.spec-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;}
+thead th{background:var(--surface2);padding:9px 13px;text-align:left;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-dim);border-bottom:1px solid var(--border);white-space:nowrap;}
+tbody td{padding:9px 13px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tbody tr:hover td{background:var(--accent-dim2);}
+tbody td input,tbody td select{padding:5px 9px;font-size:12px;}
+.btn-icon{background:none;border:1px solid var(--border);color:var(--text-muted);width:27px;height:27px;border-radius:4px;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;transition:all 0.2s;}
+.btn-icon:hover{border-color:var(--fail);color:var(--fail);background:var(--fail-dim);}
+
+/* ── BUTTONS ── */
+.btn{padding:9px 18px;border-radius:7px;border:none;font-family:var(--mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:6px;}
+.btn-p{background:var(--accent);color:#0d0d0f;font-weight:500;}
+.btn-p:hover{background:#f0d490;box-shadow:0 0 14px rgba(232,200,122,0.3);}
+.btn-s{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border);}
+.btn-s:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+.btn-green{background:var(--pass-dim);color:var(--pass);border:1px solid rgba(76,175,120,0.3);}
+.btn-green:hover{background:rgba(76,175,120,0.2);border-color:var(--pass);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-row{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap;align-items:center;}
+
+/* ── UPLOAD ── */
+.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:28px 18px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface2);position:relative;overflow:hidden;}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--accent);background:var(--accent-dim2);}
+.upload-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.uicon{font-size:24px;margin-bottom:7px;}
+.utext{font-size:12px;color:var(--text-dim);font-family:var(--mono);letter-spacing:0.06em;}
+.usub{font-size:10px;color:var(--text-muted);margin-top:4px;}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:10px;}
+.pitem{position:relative;border:1px solid var(--border);border-radius:7px;overflow:hidden;aspect-ratio:1;background:var(--surface2);}
+.pitem img{width:100%;height:100%;object-fit:cover;cursor:pointer;transition:opacity 0.2s;}
+.pitem img:hover{opacity:0.85;}
+.prm{position:absolute;top:5px;right:5px;background:rgba(13,13,15,0.8);border:1px solid var(--border);color:var(--fail);width:19px;height:19px;border-radius:3px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;}
+.plbl{position:absolute;bottom:0;left:0;right:0;background:rgba(13,13,15,0.7);padding:3px 5px;font-family:var(--mono);font-size:9px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* ── IMPORT ZONE ── */
+.import-zone{border:2px dashed var(--border);border-radius:10px;overflow:hidden;background:var(--surface2);transition:all 0.2s;cursor:pointer;position:relative;}
+.import-zone:hover,.import-zone.drag-over{border-color:var(--accent);background:var(--accent-dim2);}
+.import-zone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;z-index:2;}
+.import-inner{padding:26px 18px;text-align:center;pointer-events:none;}
+.import-icon{font-size:26px;margin-bottom:8px;}
+.import-title{font-family:var(--mono);font-size:12px;color:var(--text-dim);letter-spacing:0.08em;margin-bottom:4px;}
+.import-sub{font-size:11px;color:var(--text-muted);}
+.format-badges{display:flex;gap:6px;justify-content:center;margin-top:9px;}
+.fbadge{padding:2px 9px;border-radius:99px;font-family:var(--mono);font-size:10px;letter-spacing:0.06em;border:1px solid var(--border);color:var(--text-muted);}
+.fbadge.excel{border-color:rgba(76,175,120,0.4);color:var(--pass);}
+.fbadge.pdf{border-color:rgba(232,168,74,0.4);color:var(--warn);}
+.import-progress{display:none;padding:14px 18px;border-top:1px solid var(--border);background:var(--surface2);}
+.import-progress.show{display:block;}
+.prog-label{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--text-dim);text-transform:uppercase;margin-bottom:7px;display:flex;align-items:center;gap:8px;}
+.prog-bar-wrap{background:var(--border);border-radius:99px;height:3px;overflow:hidden;}
+.prog-bar{height:100%;background:var(--accent);border-radius:99px;transition:width 0.4s ease;width:0%;}
+.prog-steps{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;}
+.prog-step{padding:2px 9px;border-radius:99px;font-family:var(--mono);font-size:10px;border:1px solid var(--border);color:var(--text-muted);transition:all 0.3s;}
+.prog-step.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+.prog-step.done{border-color:var(--pass);color:var(--pass);background:var(--pass-dim);}
+.import-result{margin-top:12px;display:none;}
+.import-result.show{display:block;}
+.import-result-header{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:var(--pass-dim);border:1px solid rgba(76,175,120,0.3);border-radius:7px 7px 0 0;}
+.ir-label{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--pass);text-transform:uppercase;}
+.ir-count{font-family:var(--mono);font-size:11px;color:var(--pass);}
+.import-preview-table{border:1px solid var(--border);border-top:none;border-radius:0 0 7px 7px;overflow:hidden;}
+.import-preview-table table{font-size:11px;}
+.import-preview-table thead th{font-size:9px;padding:7px 11px;}
+.import-preview-table tbody td{padding:7px 11px;color:var(--text-dim);}
+.import-preview-table tbody td:first-child{color:var(--text);}
+.import-preview-table tbody tr:last-child td{border-bottom:none;}
+
+/* ── AI STATUS ── */
+.ai-status{display:flex;align-items:center;gap:10px;padding:11px 15px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;margin-bottom:13px;font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+.ai-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);flex-shrink:0;}
+.ai-dot.thinking{background:var(--warn);animation:pulse 1s infinite;}
+.ai-dot.done{background:var(--pass);}
+.ai-dot.error{background:var(--fail);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ── BADGES ── */
+.sbadge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:10px;font-family:var(--mono);letter-spacing:0.08em;text-transform:uppercase;font-weight:500;white-space:nowrap;}
+.bp{background:var(--pass-dim);color:var(--pass);}
+.bf{background:var(--fail-dim);color:var(--fail);}
+.bw{background:var(--warn-dim);color:var(--warn);}
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-bottom:16px;}
+.sc{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:14px 18px;display:flex;flex-direction:column;gap:4px;}
+.slb{font-family:var(--mono);font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-muted);}
+.sv{font-family:var(--mono);font-size:24px;font-weight:500;line-height:1;}
+.sc.scp{border-color:rgba(76,175,120,0.3);} .sc.scp .sv{color:var(--pass);}
+.sc.scf{border-color:rgba(224,82,82,0.3);} .sc.scf .sv{color:var(--fail);}
+.vbanner{border-radius:9px;padding:14px 22px;display:flex;align-items:center;gap:14px;margin-bottom:16px;font-weight:700;font-size:14px;letter-spacing:0.04em;}
+.vbanner.vp{background:var(--pass-dim);border:1px solid rgba(76,175,120,0.3);color:var(--pass);}
+.vbanner.vf{background:var(--fail-dim);border:1px solid rgba(224,82,82,0.3);color:var(--fail);}
+.vi{font-size:20px;}
+.ai-comment{background:var(--surface2);border-left:3px solid var(--accent);border-radius:0 7px 7px 0;padding:12px 14px;margin-top:12px;font-size:12px;color:var(--text-dim);line-height:1.8;white-space:pre-wrap;}
+.acl{font-family:var(--mono);font-size:9px;letter-spacing:0.15em;color:var(--accent);text-transform:uppercase;margin-bottom:6px;}
+
+/* ── SPEC CHECK ── */
+.cc{margin-bottom:16px;}
+.cc-title{font-family:var(--mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-dim);padding:8px 13px;background:var(--surface2);border:1px solid var(--border);border-radius:6px 6px 0 0;display:flex;align-items:center;gap:7px;}
+.ci{border:1px solid var(--border);border-top:none;padding:10px 13px;background:var(--surface);display:grid;grid-template-columns:1fr 200px 125px 1fr;gap:9px;align-items:center;transition:background 0.15s;}
+.ci:last-child{border-radius:0 0 6px 6px;}
+.ci:hover{background:var(--accent-dim2);}
+.ciname{font-size:12px;font-weight:500;}
+.cispec{font-size:11px;color:var(--text-dim);font-family:var(--mono);margin-top:2px;}
+.cispec em{color:var(--accent);font-style:normal;}
+.jbtns{display:flex;gap:4px;}
+.jbtn{flex:1;padding:5px 5px;border-radius:4px;border:1px solid var(--border);background:none;color:var(--text-muted);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all 0.15s;text-transform:uppercase;}
+.jbtn.jp.sel{background:var(--pass-dim);border-color:var(--pass);color:var(--pass);}
+.jbtn.jf.sel{background:var(--fail-dim);border-color:var(--fail);color:var(--fail);}
+.jbtn.jn.sel{background:var(--warn-dim);border-color:var(--warn);color:var(--warn);}
+.jbtn:hover{border-color:var(--accent);}
+.photo-attach-btn{background:none;border:1px dashed var(--border);border-radius:4px;color:var(--text-muted);font-family:var(--mono);font-size:10px;padding:4px 8px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.photo-attach-btn:hover{border-color:var(--accent);color:var(--accent);}
+.photo-attach-btn.has{border-color:var(--pass);color:var(--pass);border-style:solid;}
+
+/* ══════════════════════════════════════
+   AI 採寸タブ専用スタイル
+══════════════════════════════════════ */
+.measure-hero{
+  background:linear-gradient(135deg,rgba(232,200,122,0.06) 0%,rgba(13,13,15,0) 60%);
+  border:1px solid var(--border);border-radius:12px;padding:28px 24px;margin-bottom:18px;
+  display:flex;align-items:center;gap:20px;
+}
+.measure-hero-icon{font-size:42px;flex-shrink:0;}
+.measure-hero h2{font-family:var(--syne);font-size:18px;font-weight:700;letter-spacing:0.02em;margin-bottom:5px;}
+.measure-hero p{font-size:12px;color:var(--text-dim);line-height:1.7;}
+
+.scale-options{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
+.scale-opt{border:1px solid var(--border);border-radius:7px;padding:12px 8px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface2);}
+.scale-opt:hover{border-color:rgba(255,255,255,0.25);}
+.scale-opt.sel{border-color:var(--accent);background:var(--accent-dim);}
+.scale-icon{font-size:18px;margin-bottom:5px;}
+.scale-name{font-size:10px;color:var(--text-dim);font-family:var(--mono);letter-spacing:0.06em;}
+.scale-size{font-size:11px;color:var(--text);font-family:var(--mono);margin-top:2px;}
+.scale-opt.sel .scale-name,.scale-opt.sel .scale-size{color:var(--text);}
+#custom-scale-wrap{display:none;gap:8px;align-items:center;margin-bottom:14px;}
+#custom-scale-wrap.show{display:flex;}
+.scale-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;}
+.scale-input:focus{border-color:var(--accent);}
+.scale-unit{font-size:11px;color:var(--text-dim);white-space:nowrap;font-family:var(--mono);}
+
+/* 計測部位チェックリスト */
+.parts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:7px;margin-bottom:16px;}
+.part-chip{border:1px solid var(--border);border-radius:6px;padding:8px 12px;cursor:pointer;transition:all 0.15s;background:var(--surface2);display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+.part-chip.sel{border-color:var(--accent);background:var(--accent-dim);color:var(--text);}
+.part-chip .pc-dot{width:6px;height:6px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background 0.15s;}
+.part-chip.sel .pc-dot{background:var(--accent);}
+
+/* 採寸結果 */
+.measure-result-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;}
+#measure-canvas{width:100%;display:block;max-height:400px;object-fit:contain;background:#0a0a0a;}
+.measure-canvas-legend{padding:10px 14px;background:var(--surface);border-top:1px solid var(--border);display:flex;flex-wrap:wrap;gap:10px;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-dim);font-family:var(--mono);}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+
+.measure-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;}
+.mtable-header{display:grid;grid-template-columns:1fr 70px 90px 60px;padding:9px 14px;font-size:9px;letter-spacing:0.12em;color:var(--text-muted);text-transform:uppercase;border-bottom:1px solid var(--border);font-family:var(--mono);}
+.mrow{display:grid;grid-template-columns:1fr 70px 90px 60px;padding:11px 14px;border-bottom:1px solid var(--border);align-items:center;transition:background 0.15s;}
+.mrow:last-child{border-bottom:none;}
+.mrow:hover{background:var(--surface2);}
+.mrow-name{display:flex;align-items:center;gap:8px;font-size:12px;}
+.mrow-color{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.mrow-px{font-size:11px;color:var(--text-muted);text-align:right;font-family:var(--mono);}
+.mrow-cm{font-size:13px;font-weight:500;text-align:right;color:var(--pass);font-family:var(--mono);}
+.mrow-cm.approx{color:var(--warn);}
+.conf-badge{display:inline-block;font-size:8px;letter-spacing:0.06em;padding:1px 5px;border-radius:2px;margin-left:5px;}
+.conf-high{background:var(--pass-dim);color:var(--pass);}
+.conf-mid{background:var(--warn-dim);color:var(--warn);}
+.conf-low{background:var(--fail-dim);color:var(--fail);}
+
+.scale-note{border-left:2px solid var(--border);padding:10px 14px;font-size:11px;color:var(--text-dim);letter-spacing:0.04em;line-height:1.7;margin-bottom:13px;background:var(--surface);border-radius:0 6px 6px 0;font-family:var(--mono);}
+.scale-note.ok{border-color:var(--pass);}
+.scale-note.warn{border-color:var(--warn);}
+
+/* 取り込みバナー */
+.import-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;background:linear-gradient(90deg,rgba(76,175,120,0.1),rgba(76,175,120,0.04));border:1px solid rgba(76,175,120,0.3);border-radius:9px;margin-bottom:16px;flex-wrap:wrap;}
+.import-banner-text{font-size:12px;color:var(--pass);font-family:var(--mono);}
+.import-banner-sub{font-size:11px;color:var(--text-dim);margin-top:2px;}
+
+/* analyze log */
+.analyze-log{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:14px;font-size:10px;color:var(--text-dim);letter-spacing:0.04em;line-height:2;min-height:70px;font-family:var(--mono);margin-top:16px;max-height:160px;overflow-y:auto;}
+.log-line{display:flex;align-items:center;gap:7px;}
+.log-line::before{content:'›';color:var(--accent);}
+.analyze-spinner{width:40px;height:40px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 18px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── LIGHTBOX ── */
+#lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:999;align-items:center;justify-content:center;}
+#lightbox.open{display:flex;}
+#lightbox img{max-width:90vw;max-height:90vh;border-radius:6px;}
+#lbclose{position:absolute;top:18px;right:22px;background:none;border:1px solid var(--border);color:var(--text);width:34px;height:34px;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:22px;right:22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:11px 16px;font-family:var(--mono);font-size:11px;color:var(--text);z-index:200;transform:translateY(70px);opacity:0;transition:all 0.3s;max-width:300px;}
+#toast.show{transform:translateY(0);opacity:1;}
+#toast.success{border-color:rgba(76,175,120,0.4);color:var(--pass);}
+#toast.error{border-color:rgba(224,82,82,0.4);color:var(--fail);}
+
+.empty-state{text-align:center;padding:38px 20px;color:var(--text-muted);font-family:var(--mono);font-size:11px;letter-spacing:0.1em;}
+.empty-state .ei{font-size:26px;margin-bottom:9px;opacity:0.4;}
+
+@media(max-width:640px){.steps,.mode-tabs{flex-direction:column;}.sgrid{grid-template-columns:1fr 1fr;}.ci{grid-template-columns:1fr;}.container{padding:18px 14px;}.scale-options{grid-template-columns:repeat(2,1fr);}.parts-grid{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">RUDDERS <em>·</em> 検品システム</div>
+  <div class="hdr-r"><span id="clock">--:--:--</span><span style="color:var(--text-muted)">JST</span></div>
+</header>
+<div id="lightbox"><button id="lbclose">✕</button><img id="lbimg" src="" alt=""></div>
+<div id="toast"></div>
+
+<div class="container">
+  <div class="page-title">
+    <h1>仕様書 × 検品写真 照合ツール</h1>
+    <p>AI-POWERED INSPECTION & AUTO-MEASUREMENT · OEM QUALITY CONTROL</p>
+  </div>
+
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="switchMode('measure')"><span class="tab-icon">📐</span>AI採寸</button>
+    <button class="mode-tab" onclick="switchMode('dim')"><span class="tab-icon">📏</span>寸法検品</button>
+    <button class="mode-tab" onclick="switchMode('spec')"><span class="tab-icon">🔍</span>仕様チェック</button>
+    <button class="mode-tab" onclick="switchMode('sum')"><span class="tab-icon">📋</span>総合レポート</button>
+  </div>
+
+  <!-- ════════════════════════════════════
+       MODE: AI 採寸
+  ════════════════════════════════════ -->
+  <div class="mode-panel active" id="mode-measure">
+
+    <div class="measure-hero">
+      <div class="measure-hero-icon">📐</div>
+      <div>
+        <h2>AI 自動採寸</h2>
+        <p>服の写真を1枚アップロードするだけで、着丈・身幅・袖丈など8部位の寸法を自動で読み取ります。<br>メジャーや基準スケールを一緒に写すと精度が上がります。</p>
+      </div>
+    </div>
+
+    <!-- Step 1: 写真 -->
+    <div class="card">
+      <div class="card-title">服の写真をアップロード</div>
+      <div class="upload-zone" id="m-upload-zone">
+        <input type="file" id="m-file-input" accept="image/*" onchange="handleMeasureFile(this.files[0])">
+        <div class="uicon">📷</div>
+        <div class="utext">タップして撮影 / 画像を選択</div>
+        <div class="usub">平置きで服全体が映るように · メジャーや名刺を一緒に写すと高精度</div>
+      </div>
+      <div id="m-preview-wrap" style="display:none;margin-top:12px;position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);">
+        <img id="m-preview-img" style="width:100%;max-height:300px;object-fit:contain;background:#0a0a0a;display:block;" alt="preview">
+        <button onclick="resetMeasure()" style="position:absolute;top:8px;right:8px;background:rgba(13,13,15,0.85);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:5px 10px;border-radius:4px;cursor:pointer;letter-spacing:0.06em;">変更</button>
+      </div>
+    </div>
+
+    <!-- Step 2: スケール -->
+    <div class="card">
+      <div class="card-title">基準スケール（精度向上）</div>
+      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">写真に写っているスケールアイテムを選択すると計測精度が上がります。スケールなしでもAIが推定します。</p>
+      <div class="scale-options">
+        <div class="scale-opt" data-scale-id="none" data-scale-cm="0" onclick="selectScale(this)">
+          <div class="scale-icon">🤖</div>
+          <div class="scale-name">スケールなし</div>
+          <div class="scale-size">AI推定</div>
+        </div>
+        <div class="scale-opt sel" data-scale-id="card" data-scale-cm="8.56" onclick="selectScale(this)">
+          <div class="scale-icon">💳</div>
+          <div class="scale-name">名刺 / クレカ</div>
+          <div class="scale-size">長辺 8.56cm</div>
+        </div>
+        <div class="scale-opt" data-scale-id="a4" data-scale-cm="29.7" onclick="selectScale(this)">
+          <div class="scale-icon">📄</div>
+          <div class="scale-name">A4用紙</div>
+          <div class="scale-size">長辺 29.7cm</div>
+        </div>
+        <div class="scale-opt" data-scale-id="custom" data-scale-cm="0" onclick="selectScale(this)">
+          <div class="scale-icon">📏</div>
+          <div class="scale-name">カスタム</div>
+          <div class="scale-size">任意のcm</div>
+        </div>
+      </div>
+      <div id="custom-scale-wrap">
+        <input class="scale-input" id="custom-scale-input" type="number" placeholder="例: 30" min="1" max="200" step="0.1">
+        <span class="scale-unit">cm</span>
+      </div>
+    </div>
+
+    <!-- Step 3: 計測部位 -->
+    <div class="card">
+      <div class="card-title">計測部位の選択</div>
+      <div class="parts-grid" id="parts-grid">
+        <!-- rendered by JS -->
+      </div>
+      <div style="display:flex;gap:7px;margin-top:4px;">
+        <button class="btn btn-s" onclick="selectAllParts(true)" style="font-size:10px;padding:6px 12px;">全選択</button>
+        <button class="btn btn-s" onclick="selectAllParts(false)" style="font-size:10px;padding:6px 12px;">全解除</button>
+      </div>
+    </div>
+
+    <!-- Analyze button -->
+    <div id="m-error-box" style="display:none;background:var(--fail-dim);border:1px solid rgba(224,82,82,0.3);border-radius:7px;padding:13px;margin-bottom:13px;">
+      <div id="m-error-msg" style="font-size:11px;color:var(--fail);font-family:var(--mono);letter-spacing:0.04em;"></div>
+    </div>
+
+    <div id="m-analyze-area" style="display:none;">
+      <div class="card" style="text-align:center;padding:32px;">
+        <div class="analyze-spinner"></div>
+        <div style="font-family:var(--syne);font-size:15px;font-weight:700;margin-bottom:6px;">AI が採寸中...</div>
+        <div style="font-size:11px;color:var(--text-dim);">写真を解析し、各部位の寸法を計算しています</div>
+        <div class="analyze-log" id="m-analyze-log"></div>
+      </div>
+    </div>
+
+    <div id="m-result-area" style="display:none;">
+      <!-- canvas + table rendered by JS -->
+    </div>
+
+    <div class="btn-row" id="m-btn-row">
+      <button class="btn btn-p" id="m-run-btn" onclick="runMeasure()" disabled>📐 AI採寸を実行</button>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════
+       MODE: 寸法検品
+  ════════════════════════════════════ -->
+  <div class="mode-panel" id="mode-dim">
+    <div class="steps">
+      <button class="step-tab active"><span class="snum">Step 01</span><span class="slabel">基本情報</span></button>
+      <button class="step-tab"><span class="snum">Step 02</span><span class="slabel">仕様入力</span></button>
+      <button class="step-tab"><span class="snum">Step 03</span><span class="slabel">写真添付</span></button>
+      <button class="step-tab"><span class="snum">Step 04</span><span class="slabel">AI判定</span></button>
+    </div>
+
+    <div class="panel active" id="p1">
+      <div class="card">
+        <div class="card-title">案件情報</div>
+        <div class="fgrid">
+          <div class="fg"><label>品番</label><input type="text" id="item-no" placeholder="e.g. RD-2024-001"></div>
+          <div class="fg"><label>品名</label><input type="text" id="item-name" placeholder="e.g. テーラードジャケット"></div>
+          <div class="fg"><label>サイズ</label><select id="item-size"><option value="">選択</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>FREE</option></select></div>
+          <div class="fg"><label>カラー</label><input type="text" id="item-color" placeholder="e.g. オフホワイト"></div>
+          <div class="fg"><label>サンプル種別</label><select id="sample-type"><option value="">選択</option><option>PP Sample</option><option>Size Set</option><option>TOP Sample</option><option>Bulk</option></select></div>
+          <div class="fg"><label>検品担当者</label><input type="text" id="inspector" placeholder="氏名"></div>
+        </div>
+        <div class="tol-row">
+          <label>許容範囲 (±)</label>
+          <input type="number" id="tolerance" value="1.0" step="0.1" min="0.1" max="5">
+          <span>cm</span>
+        </div>
+      </div>
+      <div class="btn-row"><button class="btn btn-p" onclick="goStep(2)">次へ → 仕様入力</button></div>
+    </div>
+
+    <div class="panel" id="p2">
+      <!-- AI採寸からの取り込みバナー（採寸結果がある場合に表示） -->
+      <div class="import-banner" id="measure-import-banner" style="display:none;">
+        <div>
+          <div class="import-banner-text">📐 AI採寸の結果を取り込めます</div>
+          <div class="import-banner-sub">採寸タブで計測した実寸値を、指示寸として一括インポートできます</div>
+        </div>
+        <button class="btn btn-green" onclick="importFromMeasure()">採寸結果を取り込む</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">仕様書から自動読み込み</div>
+        <div class="import-zone" id="dim-import-zone">
+          <input type="file" id="dim-spec-file" accept=".xlsx,.xls,.pdf" onchange="handleSpecImport(this.files[0],'dim')">
+          <div class="import-inner">
+            <div class="import-icon">📄</div>
+            <div class="import-title">仕様書をドロップ、またはクリックして選択</div>
+            <div class="import-sub">AIが自動で寸法データを抽出します</div>
+            <div class="format-badges"><span class="fbadge excel">Excel (.xlsx)</span><span class="fbadge pdf">PDF</span></div>
+          </div>
+          <div class="import-progress" id="dim-import-progress">
+            <div class="prog-label"><div class="ai-dot thinking" id="dim-prog-dot"></div><span id="dim-prog-msg">読み込み中...</span></div>
+            <div class="prog-bar-wrap"><div class="prog-bar" id="dim-prog-bar"></div></div>
+            <div class="prog-steps"><span class="prog-step" id="dim-ps1">ファイル解析</span><span class="prog-step" id="dim-ps2">AI抽出</span><span class="prog-step" id="dim-ps3">テーブル生成</span></div>
+          </div>
+        </div>
+        <div class="import-result" id="dim-import-result">
+          <div class="import-result-header"><span class="ir-label">✓ 自動読み込み完了</span><span class="ir-count" id="dim-ir-count"></span></div>
+          <div class="import-preview-table" id="dim-ir-preview"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">寸法仕様 — 確認・編集</div>
+        <div class="spec-wrap">
+          <table><thead><tr><th>#</th><th>計測箇所</th><th>計測方法</th><th>指示寸(cm)</th><th>備考</th><th></th></tr></thead>
+          <tbody id="spec-tbody"></tbody></table>
+        </div>
+        <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap;">
+          <button class="btn btn-s" onclick="addSpecRow()">＋ 行を追加</button>
+          <button class="btn btn-s" onclick="loadPreset('jacket')">ジャケット</button>
+          <button class="btn btn-s" onclick="loadPreset('shirt')">シャツ</button>
+          <button class="btn btn-s" onclick="loadPreset('pants')">パンツ</button>
+          <button class="btn btn-s" onclick="loadPreset('tshirt')">Tシャツ</button>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="goStep(1)">← 戻る</button>
+        <button class="btn btn-p" onclick="goStep(3)">次へ → 写真添付</button>
+      </div>
+    </div>
+
+    <div class="panel" id="p3">
+      <div class="card">
+        <div class="card-title">検品写真アップロード</div>
+        <div class="upload-zone" id="dz">
+          <input type="file" id="photo-input" multiple accept="image/*" onchange="handlePhotos(this.files,'dim')">
+          <div class="uicon">📷</div>
+          <div class="utext">写真をドロップ、またはクリックして選択</div>
+          <div class="usub">JPG / PNG / HEIC · メジャー付きで撮影</div>
+        </div>
+        <div class="pgrid" id="pgrid"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="goStep(2)">← 戻る</button>
+        <button class="btn btn-p" onclick="goStep(4);runInspection()">AI判定を実行 →</button>
+      </div>
+    </div>
+
+    <div class="panel" id="p4">
+      <div id="result-area"><div class="empty-state"><div class="ei">⏳</div>AI判定を待機中...</div></div>
+      <div class="btn-row" id="result-actions" style="display:none;">
+        <button class="btn btn-s" onclick="goStep(1)">← 最初から</button>
+        <button class="btn btn-s" onclick="window.print()">🖨 印刷</button>
+        <button class="btn btn-p" onclick="exportCSV('dim')">⬇ CSV出力</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════
+       MODE: 仕様チェック
+  ════════════════════════════════════ -->
+  <div class="mode-panel" id="mode-spec">
+    <div class="card">
+      <div class="card-title">仕様書から自動読み込み</div>
+      <div class="import-zone" id="spec-import-zone">
+        <input type="file" id="spec-spec-file" accept=".xlsx,.xls,.pdf" onchange="handleSpecImport(this.files[0],'spec')">
+        <div class="import-inner">
+          <div class="import-icon">📄</div>
+          <div class="import-title">仕様書をドロップ、またはクリックして選択</div>
+          <div class="import-sub">刺繍位置・副資材・縫製仕様などを自動抽出</div>
+          <div class="format-badges"><span class="fbadge excel">Excel (.xlsx)</span><span class="fbadge pdf">PDF</span></div>
+        </div>
+        <div class="import-progress" id="spec-import-progress">
+          <div class="prog-label"><div class="ai-dot thinking" id="spec-prog-dot"></div><span id="spec-prog-msg">読み込み中...</span></div>
+          <div class="prog-bar-wrap"><div class="prog-bar" id="spec-prog-bar"></div></div>
+          <div class="prog-steps"><span class="prog-step" id="spec-ps1">ファイル解析</span><span class="prog-step" id="spec-ps2">AI抽出</span><span class="prog-step" id="spec-ps3">チェックリスト生成</span></div>
+        </div>
+      </div>
+      <div class="import-result" id="spec-import-result" style="margin-top:11px;display:none;">
+        <div class="import-result-header"><span class="ir-label">✓ 仕様項目を自動生成</span><span class="ir-count" id="spec-ir-count"></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">プリセットで追加</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;">
+        <button class="btn btn-s" onclick="loadSpecPreset('emb')">🪡 刺繍・プリント</button>
+        <button class="btn btn-s" onclick="loadSpecPreset('trim')">🔘 副資材</button>
+        <button class="btn btn-s" onclick="loadSpecPreset('sew')">🧵 縫製仕様</button>
+        <button class="btn btn-s" onclick="loadSpecPreset('mat')">🧶 素材・生地</button>
+        <button class="btn btn-s" onclick="loadSpecPreset('all')">📋 全カテゴリ</button>
+      </div>
+    </div>
+    <div id="check-area"><div class="empty-state"><div class="ei">🔍</div>仕様書をアップロードするか、プリセットを選択してください</div></div>
+    <div class="card">
+      <div class="card-title">カスタム項目を追加</div>
+      <div style="display:grid;grid-template-columns:130px 1fr 1fr auto;gap:9px;align-items:end;">
+        <div class="fg"><label>カテゴリ</label><select id="cc"><option value="刺繍・プリント">刺繍・プリント</option><option value="副資材">副資材</option><option value="縫製仕様">縫製仕様</option><option value="素材・生地">素材・生地</option><option value="その他">その他</option></select></div>
+        <div class="fg"><label>項目名</label><input type="text" id="cn" placeholder="e.g. 胸刺繍 水平位置"></div>
+        <div class="fg"><label>仕様値</label><input type="text" id="cs" placeholder="e.g. 前中心から右 5.0cm"></div>
+        <button class="btn btn-s" onclick="addCustom()" style="align-self:flex-end;">＋ 追加</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">写真添付 &amp; AI 自動判定</div>
+      <div class="upload-zone" id="sdz">
+        <input type="file" id="spec-photo-input" multiple accept="image/*" onchange="handlePhotos(this.files,'spec')">
+        <div class="uicon">📷</div><div class="utext">仕様確認写真をアップロード</div><div class="usub">刺繍・副資材・縫い目写真など</div>
+      </div>
+      <div class="pgrid" id="spgrid"></div>
+      <div class="btn-row">
+        <button class="btn btn-p" onclick="runSpecAI()">🤖 AI で仕様チェックを実行</button>
+        <button class="btn btn-s" onclick="exportCSV('spec')">⬇ CSV出力</button>
+      </div>
+    </div>
+    <div id="spec-result"></div>
+  </div>
+
+  <!-- ════════════════════════════════════
+       MODE: 総合レポート
+  ════════════════════════════════════ -->
+  <div class="mode-panel" id="mode-sum">
+    <div class="card">
+      <div class="card-title">総合検品レポート</div>
+      <div id="sum-content"><div class="empty-state"><div class="ei">📋</div>各タブで検品を実行後、ここに統合レポートが表示されます</div></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-s" onclick="window.print()">🖨 印刷</button>
+      <button class="btn btn-p" onclick="exportAll()">⬇ 全データ CSV</button>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════
+let dimPhotos=[], specPhotos=[], specItems=[], dimResults=null;
+let measureState = {
+  imageDataUrl: null,
+  scaleCm: 8.56,
+  scaleId: 'card',
+  selectedParts: [],
+  results: null
+};
+
+// ════════════════════════════════════════════════
+// 計測部位定義
+// ════════════════════════════════════════════════
+const MEASURE_PARTS = [
+  { id:'着丈',     label:'着丈',      desc:'後ろ衿付け根〜裾' },
+  { id:'身幅',     label:'身幅',      desc:'脇下縫い目（直線）' },
+  { id:'袖丈',     label:'袖丈',      desc:'肩縫い目〜袖口' },
+  { id:'天巾',     label:'天巾',      desc:'衿ぐり幅（肩から肩）' },
+  { id:'前下がり', label:'前下がり',  desc:'衿前中心の深さ' },
+  { id:'裾幅',     label:'裾幅',      desc:'裾の開き幅' },
+  { id:'袖口巾',   label:'袖口巾',    desc:'袖口の開き幅' },
+  { id:'AH',       label:'AH(直線)',  desc:'アームホール直線' },
+];
+
+const MCOLORS = ['#e8c87a','#4caf78','#4a90d9','#e05252','#c87ae8','#78c8e8','#e8a84a','#a8e878'];
+
+// ════════════════════════════════════════════════
+// CLOCK
+// ════════════════════════════════════════════════
+setInterval(()=>{
+  document.getElementById('clock').textContent=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+},1000);
+
+// ════════════════════════════════════════════════
+// MODE / STEP
+// ════════════════════════════════════════════════
+function switchMode(m){
+  document.querySelectorAll('.mode-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.mode-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('mode-'+m).classList.add('active');
+  [...document.querySelectorAll('.mode-tab')][['measure','dim','spec','sum'].indexOf(m)].classList.add('active');
+  if(m==='sum') buildSummary();
+  if(m==='dim') checkMeasureBanner();
+}
+function goStep(n){
+  document.querySelectorAll('#mode-dim .panel').forEach((p,i)=>p.classList.toggle('active',i+1===n));
+  document.querySelectorAll('#mode-dim .step-tab').forEach((t,i)=>{
+    t.classList.remove('active','done');
+    if(i+1===n)t.classList.add('active'); else if(i+1<n)t.classList.add('done');
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ════════════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════════════
+function toast(msg,type='success'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='show '+(type||'');
+  setTimeout(()=>t.className='',3000);
+}
+
+// ════════════════════════════════════════════════
+// AI 採寸
+// ════════════════════════════════════════════════
+function initPartsGrid(){
+  const grid=document.getElementById('parts-grid');
+  grid.innerHTML='';
+  measureState.selectedParts=MEASURE_PARTS.map(p=>p.id); // 全選択
+  MEASURE_PARTS.forEach((p,i)=>{
+    const div=document.createElement('div');
+    div.className='part-chip sel';div.dataset.id=p.id;
+    div.innerHTML=`<div class="pc-dot" style="background:${MCOLORS[i]}"></div><div><div>${p.label}</div><div style="font-size:9px;color:var(--text-muted);margin-top:1px;">${p.desc}</div></div>`;
+    div.onclick=()=>togglePart(p.id,div);
+    grid.appendChild(div);
+  });
+}
+
+function togglePart(id,el){
+  const idx=measureState.selectedParts.indexOf(id);
+  if(idx>=0){measureState.selectedParts.splice(idx,1);el.classList.remove('sel');}
+  else{measureState.selectedParts.push(id);el.classList.add('sel');}
+}
+
+function selectAllParts(sel){
+  measureState.selectedParts=sel?MEASURE_PARTS.map(p=>p.id):[];
+  document.querySelectorAll('.part-chip').forEach(el=>{
+    el.classList.toggle('sel',sel);
+  });
+}
+
+function handleMeasureFile(file){
+  if(!file||!file.type.startsWith('image/'))return;
+  const r=new FileReader();
+  r.onload=e=>{
+    measureState.imageDataUrl=e.target.result;
+    document.getElementById('m-preview-img').src=e.target.result;
+    document.getElementById('m-preview-wrap').style.display='block';
+    document.getElementById('m-upload-zone').style.display='none';
+    document.getElementById('m-run-btn').disabled=false;
+  };
+  r.readAsDataURL(file);
+}
+
+function resetMeasure(){
+  measureState.imageDataUrl=null;
+  document.getElementById('m-preview-wrap').style.display='none';
+  document.getElementById('m-upload-zone').style.display='block';
+  document.getElementById('m-run-btn').disabled=true;
+  document.getElementById('m-result-area').style.display='none';
+  document.getElementById('m-analyze-area').style.display='none';
+}
+
+function selectScale(el){
+  document.querySelectorAll('.scale-opt').forEach(o=>o.classList.remove('sel'));
+  el.classList.add('sel');
+  measureState.scaleId=el.dataset.scaleId;
+  measureState.scaleCm=parseFloat(el.dataset.scaleCm)||0;
+  const cw=document.getElementById('custom-scale-wrap');
+  if(el.dataset.scaleId==='custom') cw.classList.add('show');
+  else cw.classList.remove('show');
+}
+
+async function runMeasure(){
+  if(!measureState.imageDataUrl){alert('写真をアップロードしてください');return;}
+  if(measureState.selectedParts.length===0){alert('計測部位を1つ以上選択してください');return;}
+  if(measureState.scaleId==='custom'){
+    const v=parseFloat(document.getElementById('custom-scale-input').value);
+    if(!v){alert('カスタムスケールのcmを入力してください');return;}
+    measureState.scaleCm=v;
+  }
+
+  document.getElementById('m-btn-row').style.display='none';
+  document.getElementById('m-analyze-area').style.display='block';
+  document.getElementById('m-result-area').style.display='none';
+  document.getElementById('m-error-box').style.display='none';
+
+  const log=document.getElementById('m-analyze-log');
+  log.innerHTML='';
+  function addLog(msg){const l=document.createElement('div');l.className='log-line';l.textContent=msg;log.appendChild(l);log.scrollTop=log.scrollHeight;}
+
+  addLog('画像を前処理中...');
+  await sleep(300);
+  const scaleLabel=measureState.scaleId==='none'?'スケールなし（AI推定）':
+    document.querySelector('.scale-opt.sel .scale-name')?.textContent||'スケール';
+  if(measureState.scaleId!=='none') addLog(`スケール: ${scaleLabel} (${measureState.scaleCm}cm)`);
+  await sleep(300);
+  addLog(`計測部位: ${measureState.selectedParts.join('・')} — ${measureState.selectedParts.length}箇所`);
+  await sleep(400);
+  addLog('Claude Vision API に送信中...');
+
+  try{
+    const base64=measureState.imageDataUrl.split(',')[1];
+    const mimeType=measureState.imageDataUrl.split(';')[0].split(':')[1];
+
+    const scaleDesc=measureState.scaleId==='none'
+      ?'写真内にスケールアイテムはありません。服のシルエットと一般的なアパレルサイズ感から実寸を推定してください。'
+      :`写真内の基準スケール：${scaleLabel}（実寸 ${measureState.scaleCm}cm）`;
+
+    const partsDesc=measureState.selectedParts.map((id,i)=>{
+      const p=MEASURE_PARTS.find(x=>x.id===id);
+      return `${i+1}. ${p.label}（${p.desc}）`;
+    }).join('\n');
+
+    const prompt=`あなたはアパレル服の採寸AIです。この画像は平置きされた服（トップス系）の写真です。
+${scaleDesc}
+
+以下の部位を計測してください：
+${partsDesc}
+
+【計測の注意事項】
+- 着丈：後ろ衿付け根から裾まで（直線）
+- 身幅：脇下縫い目の水平距離（片側）
+- 袖丈：肩の縫い目から袖口縫い目まで
+- 天巾：前衿ぐりの肩端から肩端（衿幅）
+- 前下がり：前衿ぐりの最も深い点から肩ラインまでの垂直距離
+- 裾幅：裾の端から端（片側）
+- 袖口巾：袖口の開き幅（片側）
+- AH直線：アームホールの縦の直線距離
+${measureState.scaleId!=='none'?`- スケールアイテムのピクセル長さを計測し、1px = ${(measureState.scaleCm / 100).toFixed(4)}cm相当として実寸を計算してください`:'- 服全体のシルエットから典型的なアパレルサイズを参考に実寸を推定してください'}
+
+以下のJSON形式のみで返答してください：
+{
+  "scale_found": ${measureState.scaleId!=='none'},
+  "scale_px": 数値またはnull,
+  "scale_cm": ${measureState.scaleCm},
+  "px_per_cm": 数値またはnull,
+  "measurements": [
+    {
+      "name": "部位名",
+      "x1": 数値, "y1": 数値,
+      "x2": 数値, "y2": 数値,
+      "px_length": 数値,
+      "cm_length": 数値,
+      "confidence": "high"|"mid"|"low",
+      "note": "備考（任意）"
+    }
+  ],
+  "overall_note": "全体備考"
+}`;
+
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mimeType,data:base64}},
+          {type:'text',text:prompt}
+        ]}]
+      })
+    });
+
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
+    const data=await res.json();
+    const text=data.content.find(b=>b.type==='text')?.text||'';
+    addLog('レスポンス受信 — 解析中...');
+    await sleep(200);
+
+    const m=text.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('AIのレスポンスを解析できませんでした');
+    const json=JSON.parse(m[0]);
+
+    addLog(`✓ ${json.measurements.length}箇所の計測完了`);
+    await sleep(300);
+
+    measureState.results=json;
+    renderMeasureResults(json);
+    document.getElementById('m-analyze-area').style.display='none';
+    document.getElementById('m-result-area').style.display='block';
+    document.getElementById('m-btn-row').style.display='flex';
+    document.getElementById('m-run-btn').textContent='🔄 再実行';
+    document.getElementById('m-run-btn').disabled=false;
+
+  }catch(err){
+    document.getElementById('m-analyze-area').style.display='none';
+    document.getElementById('m-btn-row').style.display='flex';
+    document.getElementById('m-run-btn').disabled=false;
+    document.getElementById('m-error-box').style.display='block';
+    document.getElementById('m-error-msg').textContent='エラー: '+err.message;
+  }
+}
+
+function renderMeasureResults(r){
+  const area=document.getElementById('m-result-area');
+
+  // Canvas
+  const img=new Image();
+  img.onload=()=>{
+    const canvasId='measure-canvas-'+Date.now();
+    const scaleNote=r.scale_found
+      ?`✓ スケール検出: ${r.scale_px?.toFixed(0)}px = ${r.scale_cm}cm → 1cm ≈ ${r.px_per_cm?.toFixed(1)}px`
+      :'⚠ スケールなし（AI推定値）';
+
+    let tableRows=r.measurements.map((m,i)=>{
+      const isApprox=m.confidence!=='high';
+      const cCls={high:'conf-high',mid:'conf-mid',low:'conf-low'}[m.confidence]||'conf-mid';
+      const cLbl={high:'高精度',mid:'推定',low:'不明瞭'}[m.confidence]||'推定';
+      return `<div class="mrow">
+        <div class="mrow-name"><div class="mrow-color" style="background:${MCOLORS[i%MCOLORS.length]}"></div>${m.name}<span class="conf-badge ${cCls}">${cLbl}</span></div>
+        <div class="mrow-px">${m.px_length?.toFixed(0)??'—'}px</div>
+        <div class="mrow-cm ${isApprox?'approx':''}">${m.cm_length.toFixed(1)} cm</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--text-muted);text-align:right;">${m.note||''}</div>
+      </div>`;
+    }).join('');
+
+    let legendHtml=r.measurements.map((m,i)=>`<div class="legend-item"><div class="legend-dot" style="background:${MCOLORS[i%MCOLORS.length]}"></div>${m.name}</div>`).join('');
+
+    area.innerHTML=`
+      <div class="import-banner">
+        <div>
+          <div class="import-banner-text">✅ 採寸完了 — ${r.measurements.length}部位を計測</div>
+          <div class="import-banner-sub">「寸法検品」タブで指示寸として取り込めます</div>
+        </div>
+        <button class="btn btn-green" onclick="switchMode('dim');setTimeout(()=>{goStep(2);checkMeasureBanner();},100)">寸法検品に取り込む →</button>
+      </div>
+      <div class="measure-result-wrap">
+        <canvas id="${canvasId}" style="width:100%;display:block;max-height:400px;object-fit:contain;background:#0a0a0a;"></canvas>
+        <div class="measure-canvas-legend">${legendHtml}</div>
+      </div>
+      <div class="scale-note ${r.scale_found?'ok':'warn'}">${scaleNote}</div>
+      <div class="measure-table-wrap">
+        <div class="mtable-header"><span>計測箇所</span><span style="text-align:right">px長さ</span><span style="text-align:right">実寸(cm)</span><span></span></div>
+        ${tableRows}
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-s" onclick="exportMeasureCSV()">⬇ CSV出力</button>
+        <button class="btn btn-s" onclick="exportMeasureImage('${canvasId}')">⬇ 注釈画像</button>
+      </div>
+    `;
+
+    // Draw on canvas
+    const canvas=document.getElementById(canvasId);
+    const ctx=canvas.getContext('2d');
+    const maxW=Math.min(img.width,1200);
+    const sc=maxW/img.width;
+    canvas.width=img.width*sc;canvas.height=img.height*sc;
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+
+    r.measurements.forEach((m,i)=>{
+      const color=MCOLORS[i%MCOLORS.length];
+      ctx.beginPath();ctx.moveTo(m.x1*sc,m.y1*sc);ctx.lineTo(m.x2*sc,m.y2*sc);
+      ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.setLineDash([]);ctx.stroke();
+      [[m.x1*sc,m.y1*sc],[m.x2*sc,m.y2*sc]].forEach(([x,y])=>{
+        ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+        ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+      });
+      const mx=((m.x1+m.x2)/2)*sc,my=((m.y1+m.y2)/2)*sc;
+      const label=`${m.name} ${m.cm_length.toFixed(1)}cm`;
+      ctx.font='bold 12px monospace';
+      const tw=ctx.measureText(label).width;
+      ctx.fillStyle='rgba(0,0,0,0.72)';ctx.fillRect(mx-tw/2-6,my-10,tw+12,20);
+      ctx.fillStyle=color;ctx.fillText(label,mx-tw/2,my+4);
+    });
+  };
+  img.src=measureState.imageDataUrl;
+}
+
+// 採寸結果を寸法検品に取り込む
+function checkMeasureBanner(){
+  const banner=document.getElementById('measure-import-banner');
+  if(banner) banner.style.display=measureState.results?'flex':'none';
+}
+
+function importFromMeasure(){
+  if(!measureState.results)return;
+  const tbody=document.getElementById('spec-tbody');
+  tbody.innerHTML='';
+  measureState.results.measurements.forEach(m=>{
+    const p=MEASURE_PARTS.find(x=>x.id===m.name||x.label===m.name);
+    addSpecRow(m.name, p?p.desc:'', m.cm_length.toFixed(1));
+  });
+  toast(`${measureState.results.measurements.length}部位の採寸値を指示寸として取り込みました ✓`);
+}
+
+function exportMeasureCSV(){
+  if(!measureState.results)return;
+  const rows=[['部位','px長さ','実寸(cm)','信頼度','備考'],...measureState.results.measurements.map(m=>[m.name,m.px_length?.toFixed(0),m.cm_length.toFixed(1),m.confidence,m.note||''])];
+  dl(rows,`RUDDERS_採寸_${new Date().toISOString().slice(0,10)}.csv`);
+}
+function exportMeasureImage(canvasId){
+  const c=document.getElementById(canvasId);if(!c)return;
+  const a=document.createElement('a');a.href=c.toDataURL('image/jpeg',0.92);a.download=`RUDDERS_採寸_${Date.now()}.jpg`;a.click();
+}
+
+// ════════════════════════════════════════════════
+// SPEC IMPORT
+// ════════════════════════════════════════════════
+['dim-import-zone','spec-import-zone'].forEach((id,i)=>{
+  const z=document.getElementById(id);const type=i===0?'dim':'spec';
+  z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drag-over');});
+  z.addEventListener('dragleave',()=>z.classList.remove('drag-over'));
+  z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)handleSpecImport(f,type);});
+});
+
+async function handleSpecImport(file,type){
+  if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['xlsx','xls','pdf'].includes(ext)){toast('Excel または PDF を選択してください','error');return;}
+  const prog=document.getElementById(type+'-import-progress');
+  const bar=document.getElementById(type+'-prog-bar');
+  const msg=document.getElementById(type+'-prog-msg');
+  const ps1=document.getElementById(type+'-ps1');
+  const ps2=document.getElementById(type+'-ps2');
+  const ps3=document.getElementById(type+'-ps3');
+  prog.classList.add('show');
+  ps1.classList.add('active');msg.textContent='ファイルを解析中...';bar.style.width='15%';
+  let extracted='';
+  try{
+    if(ext==='xlsx'||ext==='xls') extracted=await extractExcel(file);
+    else extracted=await toBase64(file);
+    ps1.classList.replace('active','done');bar.style.width='40%';
+    ps2.classList.add('active');msg.textContent='AIが仕様データを抽出中...';bar.style.width='55%';
+    const result=await aiExtractSpec(file,ext,extracted,type);
+    ps2.classList.replace('active','done');bar.style.width='80%';
+    ps3.classList.add('active');msg.textContent='項目を生成中...';
+    if(type==='dim') applyDimResult(result);
+    else applySpecResult(result);
+    bar.style.width='100%';
+    ps3.classList.replace('active','done');
+    msg.textContent='読み込み完了';
+    document.getElementById(type+'-prog-dot').className='ai-dot done';
+    toast('仕様書を読み込みました ✓');
+  }catch(err){
+    msg.textContent='エラー: '+err.message;
+    document.getElementById(type+'-prog-dot').className='ai-dot error';
+    toast('読み込み失敗: '+err.message,'error');
+  }
+}
+
+async function extractExcel(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>{try{const d=new Uint8Array(e.target.result);const wb=XLSX.read(d,{type:'array'});let t='';wb.SheetNames.forEach(n=>{const csv=XLSX.utils.sheet_to_csv(wb.Sheets[n]);if(csv.trim())t+=`[${n}]\n${csv}\n\n`;});res(t);}catch(err){rej(err);}};
+    r.onerror=()=>rej(new Error('読み込み失敗'));r.readAsArrayBuffer(file);
+  });
+}
+function toBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=()=>rej(new Error('読み込み失敗'));r.readAsDataURL(file);});}
+
+async function aiExtractSpec(file,ext,extracted,type){
+  let content=[];
+  if(ext==='pdf') content.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:extracted}});
+  const pDim=`アパレル仕様書から「寸法（サイズスペック）」を抽出してください。${ext!=='pdf'?`\n【テキスト】\n${extracted.slice(0,8000)}`:''}
+JSONのみ返答:{"meta":{"item_no":"","item_name":"","size":"","color":""},"dimensions":[{"part":"","method":"","spec":数値orNull,"note":""}]}`;
+  const pSpec=`アパレル仕様書から「寸法以外の仕様」（刺繍・副資材・縫製・素材）を抽出してください。${ext!=='pdf'?`\n【テキスト】\n${extracted.slice(0,8000)}`:''}
+JSONのみ返答:{"spec_items":[{"category":"刺繍・プリント"or"副資材"or"縫製仕様"or"素材・生地"or"その他","name":"","spec":""}]}`;
+  content.push({type:'text',text:type==='dim'?pDim:pSpec});
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content}]})});
+  const data=await res.json();
+  const raw=data.content.map(c=>c.text||'').join('');
+  const clean=raw.replace(/```json|```/g,'').trim();
+  return JSON.parse(clean.substring(clean.indexOf('{'),clean.lastIndexOf('}')+1));
+}
+
+function applyDimResult(r){
+  if(r.meta){
+    if(r.meta.item_no) document.getElementById('item-no').value=r.meta.item_no;
+    if(r.meta.item_name) document.getElementById('item-name').value=r.meta.item_name;
+    if(r.meta.color) document.getElementById('item-color').value=r.meta.color;
+  }
+  const dims=r.dimensions||[];
+  if(dims.length>0){document.getElementById('spec-tbody').innerHTML='';dims.forEach(d=>addSpecRow(d.part||'',d.method||'',d.spec||''));}
+  const ir=document.getElementById('dim-import-result');ir.classList.add('show');
+  document.getElementById('dim-ir-count').textContent=`${dims.length}項目を抽出`;
+  let html='<table><thead><tr><th>計測箇所</th><th>計測方法</th><th>指示寸(cm)</th></tr></thead><tbody>';
+  dims.slice(0,5).forEach(d=>{html+=`<tr><td>${d.part||'—'}</td><td>${d.method||'—'}</td><td style="text-align:right">${d.spec??'—'}</td></tr>`;});
+  if(dims.length>5)html+=`<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">... 他${dims.length-5}項目</td></tr>`;
+  document.getElementById('dim-ir-preview').innerHTML=html+'</tbody></table>';
+}
+
+function applySpecResult(r){
+  const items=r.spec_items||[];
+  items.forEach(item=>specItems.push({id:Date.now()+Math.random(),cat:item.category||'その他',name:item.name,spec:item.spec,status:'',note:'',photo:null}));
+  if(items.length>0) renderChecklist();
+  document.getElementById('spec-import-result').style.display='block';
+  document.getElementById('spec-ir-count').textContent=`${items.length}項目を抽出`;
+}
+
+// ════════════════════════════════════════════════
+// DIMENSION TABLE
+// ════════════════════════════════════════════════
+const DP={
+  jacket:[{p:'肩幅',m:'両肩縫い目間',s:''},{p:'胸幅',m:'脇下2cm地点',s:''},{p:'身幅',m:'脇下縫い目',s:''},{p:'着丈',m:'後衿付け根〜裾',s:''},{p:'袖丈',m:'肩縫い目〜袖口',s:''},{p:'袖幅',m:'袖付け根付近',s:''},{p:'袖口幅',m:'袖口開き',s:''}],
+  shirt:[{p:'肩幅',m:'両肩縫い目間',s:''},{p:'胸幅',m:'脇下2cm地点',s:''},{p:'身幅',m:'脇下縫い目',s:''},{p:'着丈',m:'後衿付け根〜裾',s:''},{p:'袖丈',m:'肩〜袖口',s:''},{p:'袖口幅',m:'袖口開き',s:''},{p:'衿周り',m:'衿ぐり縫い目周長',s:''}],
+  pants:[{p:'ウエスト',m:'ウエストバンド内寸',s:''},{p:'ヒップ',m:'股上+2cm',s:''},{p:'股上',m:'ウエスト〜股（前）',s:''},{p:'股下',m:'股〜裾',s:''},{p:'腿幅',m:'股下0cm',s:''},{p:'裾幅',m:'裾開き',s:''},{p:'わたり',m:'股点〜脇縫い目',s:''}],
+  tshirt:[{p:'肩幅',m:'両肩縫い目間',s:''},{p:'胸幅',m:'脇下2cm地点',s:''},{p:'身幅',m:'脇下縫い目',s:''},{p:'着丈',m:'後衿付け根〜裾',s:''},{p:'袖丈',m:'肩〜袖口',s:''},{p:'袖口幅',m:'袖口開き',s:''},{p:'衿高さ',m:'衿ぐり縫い目高さ',s:''}]
+};
+function loadPreset(t){document.getElementById('spec-tbody').innerHTML='';DP[t].forEach(r=>addSpecRow(r.p,r.m,r.s));}
+function addSpecRow(p='',m='',s=''){
+  const tb=document.getElementById('spec-tbody');const i=tb.children.length+1;
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td style="color:var(--text-muted);font-family:var(--mono)">${String(i).padStart(2,'0')}</td><td><input type="text" value="${p}" placeholder="計測箇所名" style="min-width:100px"></td><td><input type="text" value="${m}" placeholder="計測方法" style="min-width:120px"></td><td><input type="number" value="${s}" placeholder="0.0" step="0.5" style="width:78px;text-align:right"></td><td><input type="text" placeholder="メモ" style="min-width:80px"></td><td><button class="btn-icon" onclick="removeRow(this)">✕</button></td>`;
+  tb.appendChild(tr);
+}
+function removeRow(b){b.closest('tr').remove();document.querySelectorAll('#spec-tbody tr').forEach((tr,i)=>tr.cells[0].textContent=String(i+1).padStart(2,'0'));}
+function getSpecRows(){
+  const rows=[];
+  document.querySelectorAll('#spec-tbody tr').forEach(tr=>{
+    const c=tr.querySelectorAll('input');if(!c[0].value.trim())return;
+    rows.push({part:c[0].value.trim(),method:c[1].value.trim(),spec:parseFloat(c[2].value)||null,note:c[3].value.trim()});
+  });return rows;
+}
+
+// ════════════════════════════════════════════════
+// PHOTOS
+// ════════════════════════════════════════════════
+['dz','sdz'].forEach((id,i)=>{
+  const z=document.getElementById(id);const type=i===0?'dim':'spec';
+  z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drag-over');});
+  z.addEventListener('dragleave',()=>z.classList.remove('drag-over'));
+  z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('drag-over');handlePhotos(e.dataTransfer.files,type);});
+});
+function handlePhotos(files,type){
+  Array.from(files).forEach(file=>{
+    if(!file.type.startsWith('image/'))return;
+    const r=new FileReader();
+    r.onload=e=>{(type==='dim'?dimPhotos:specPhotos).push({name:file.name,data:e.target.result,file});renderPreviews(type);};
+    r.readAsDataURL(file);
+  });
+}
+function renderPreviews(type){
+  const arr=type==='dim'?dimPhotos:specPhotos;
+  const grid=document.getElementById(type==='dim'?'pgrid':'spgrid');
+  grid.innerHTML='';
+  arr.forEach((p,i)=>{
+    const d=document.createElement('div');d.className='pitem';
+    d.innerHTML=`<img src="${p.data}" alt="${p.name}" onclick="openLB('${p.data}')"><button class="prm" onclick="rmPhoto(${i},'${type}')">✕</button><div class="plbl">${p.name}</div>`;
+    grid.appendChild(d);
+  });
+}
+function rmPhoto(i,type){(type==='dim'?dimPhotos:specPhotos).splice(i,1);renderPreviews(type);}
+
+// ════════════════════════════════════════════════
+// LIGHTBOX
+// ════════════════════════════════════════════════
+function openLB(src){document.getElementById('lbimg').src=src;document.getElementById('lightbox').classList.add('open');}
+document.getElementById('lbclose').onclick=()=>document.getElementById('lightbox').classList.remove('open');
+document.getElementById('lightbox').onclick=e=>{if(e.target===document.getElementById('lightbox'))document.getElementById('lightbox').classList.remove('open');};
+
+// ════════════════════════════════════════════════
+// SPEC CHECK
+// ════════════════════════════════════════════════
+const SP={
+  emb:[{cat:'刺繍・プリント',name:'胸刺繍 水平位置',spec:'前中心から右 5.0cm'},{cat:'刺繍・プリント',name:'胸刺繍 垂直位置',spec:'衿付け根から下 8.0cm'},{cat:'刺繍・プリント',name:'刺繍サイズ（横）',spec:'6.0cm'},{cat:'刺繍・プリント',name:'刺繍サイズ（縦）',spec:'4.0cm'},{cat:'刺繍・プリント',name:'刺繍カラー',spec:'仕様書指定色と一致'},{cat:'刺繍・プリント',name:'バックプリント位置',spec:'後中心・衿から12cm下'},{cat:'刺繍・プリント',name:'刺繍糸の飛び出し・ほつれ',spec:'なきこと'}],
+  trim:[{cat:'副資材',name:'ボタン品番',spec:'仕様書指定品番と一致'},{cat:'副資材',name:'ボタンサイズ',spec:'仕様書記載サイズ(mm)'},{cat:'副資材',name:'ボタンカラー',spec:'仕様書指定色と一致'},{cat:'副資材',name:'ボタン数量',spec:'仕様書記載数量'},{cat:'副資材',name:'ファスナー品番・カラー',spec:'仕様書指定と一致'},{cat:'副資材',name:'ファスナー長さ',spec:'仕様書記載長さ(cm)'},{cat:'副資材',name:'洗濯絵表示タグ',spec:'正しい位置・向きで縫付'},{cat:'副資材',name:'下げ札・ネームタグ',spec:'仕様書指定位置・種類と一致'}],
+  sew:[{cat:'縫製仕様',name:'ステッチ幅（本縫い）',spec:'仕様書記載幅(mm)'},{cat:'縫製仕様',name:'ステッチカラー',spec:'仕様書指定色と一致'},{cat:'縫製仕様',name:'縫い目ピッチ',spec:'仕様書記載数値(目/3cm)'},{cat:'縫製仕様',name:'縫い始め・終わりの返し縫い',spec:'適切に施されていること'},{cat:'縫製仕様',name:'縫いずれ・パッカリング',spec:'なきこと'},{cat:'縫製仕様',name:'脇縫い割り/倒し方向',spec:'仕様書指定方向と一致'},{cat:'縫製仕様',name:'裾の縫製方法',spec:'仕様書指定方法と一致'}],
+  mat:[{cat:'素材・生地',name:'表生地 品番・カラー',spec:'仕様書指定と一致'},{cat:'素材・生地',name:'裏地 品番・カラー',spec:'仕様書指定と一致'},{cat:'素材・生地',name:'芯地の有無・種類',spec:'仕様書指定と一致'},{cat:'素材・生地',name:'生地の歪み・ゆがみ',spec:'なきこと'},{cat:'素材・生地',name:'色ムラ・汚れ',spec:'なきこと'},{cat:'素材・生地',name:'毛並み方向（起毛素材）',spec:'全パーツ同方向'}]
+};
+function loadSpecPreset(t){
+  if(t==='all'){specItems=[];Object.keys(SP).forEach(k=>SP[k].forEach(item=>specItems.push({...item,id:Date.now()+Math.random(),status:'',note:'',photo:null})));}
+  else{const cat=SP[t][0].cat;specItems=specItems.filter(i=>i.cat!==cat);SP[t].forEach(item=>specItems.push({...item,id:Date.now()+Math.random(),status:'',note:'',photo:null}));}
+  renderChecklist();
+}
+function addCustom(){
+  const cat=document.getElementById('cc').value,name=document.getElementById('cn').value.trim(),spec=document.getElementById('cs').value.trim();
+  if(!name)return;specItems.push({id:Date.now(),cat,name,spec,status:'',note:'',photo:null});
+  document.getElementById('cn').value='';document.getElementById('cs').value='';renderChecklist();
+}
+const catIcon={'刺繍・プリント':'🪡','副資材':'🔘','縫製仕様':'🧵','素材・生地':'🧶','その他':'📌'};
+function renderChecklist(){
+  const area=document.getElementById('check-area');
+  if(!specItems.length){area.innerHTML=`<div class="empty-state"><div class="ei">🔍</div>項目がありません</div>`;return;}
+  const groups={};specItems.forEach(item=>{if(!groups[item.cat])groups[item.cat]=[];groups[item.cat].push(item);});
+  let html='';
+  Object.entries(groups).forEach(([cat,items])=>{
+    html+=`<div class="cc"><div class="cc-title"><span>${catIcon[cat]||'📌'}</span>${cat}</div>`;
+    items.forEach(item=>{
+      html+=`<div class="ci" id="ci-${item.id}">
+        <div><div class="ciname">${item.name}</div><div class="cispec">仕様: <em>${item.spec||'未入力'}</em></div></div>
+        <div class="jbtns">
+          <button class="jbtn jp ${item.status==='合格'?'sel':''}" onclick="setSt('${item.id}','合格')">✓ 合格</button>
+          <button class="jbtn jf ${item.status==='不合格'?'sel':''}" onclick="setSt('${item.id}','不合格')">✕ 不合格</button>
+          <button class="jbtn jn ${item.status==='対象外'?'sel':''}" onclick="setSt('${item.id}','対象外')">— 対象外</button>
+        </div>
+        <input type="text" placeholder="コメント" value="${item.note||''}" oninput="setNote('${item.id}',this.value)" style="font-size:11px;padding:5px 9px;">
+        <div style="display:flex;gap:5px;align-items:center;justify-content:flex-end;">
+          <button class="photo-attach-btn ${item.photo?'has':''}" onclick="attachPhoto('${item.id}')">${item.photo?'📷 写真あり':'📷 写真を添付'}</button>
+          <button class="btn-icon" onclick="rmCheck('${item.id}')">✕</button>
+        </div>
+      </div>`;
+    });html+=`</div>`;
+  });
+  area.innerHTML=html;
+}
+function setSt(id,st){const i=specItems.find(x=>String(x.id)===String(id));if(i){i.status=i.status===st?'':st;renderChecklist();}}
+function setNote(id,v){const i=specItems.find(x=>String(x.id)===String(id));if(i)i.note=v;}
+function rmCheck(id){specItems=specItems.filter(x=>String(x.id)!==String(id));renderChecklist();}
+function attachPhoto(id){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+  inp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{const i=specItems.find(x=>String(x.id)===String(id));if(i){i.photo=ev.target.result;i.photoName=f.name;renderChecklist();}};r.readAsDataURL(f);};inp.click();
+}
+
+// ════════════════════════════════════════════════
+// AI SPEC CHECK
+// ════════════════════════════════════════════════
+async function runSpecAI(){
+  if(!specItems.length){alert('チェック項目を追加してください');return;}
+  const ra=document.getElementById('spec-result');
+  ra.innerHTML=`<div class="card"><div class="ai-status"><div class="ai-dot thinking"></div><span>AIが写真から仕様を確認中...</span></div></div>`;
+  try{
+    const content=[];
+    [...specPhotos,...specItems.filter(i=>i.photo).map(i=>({data:i.photo,name:i.photoName||'item',file:{type:'image/jpeg'}}))].forEach(p=>content.push({type:'image',source:{type:'base64',media_type:p.file?.type||'image/jpeg',data:p.data.split(',')[1]}}));
+    const it=specItems.map((item,i)=>`${i+1}. [${item.cat}] ${item.name} / 仕様: ${item.spec||'未入力'}`).join('\n');
+    content.push({type:'text',text:`プロのアパレル検品技術者として以下を判定してください。\n${it}\nJSONのみ返答:{"results":[{"index":番号,"name":"項目名","status":"合格"or"不合格"or"判定不可","comment":""}],"overall":"合格"or"不合格"or"要確認","summary":"所見"}`});
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content}]})});
+    const data=await res.json();
+    const raw=data.content.map(c=>c.text||'').join('');
+    const clean=raw.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(clean.substring(clean.indexOf('{'),clean.lastIndexOf('}')+1));
+    if(parsed.results){parsed.results.forEach(r=>{const item=specItems[r.index-1];if(item){item.status=r.status;if(r.comment)item.note=r.comment;}});renderChecklist();}
+    const v=parsed.overall||'要確認';const r=parsed.results||[];
+    const pc=r.filter(x=>x.status==='合格').length,fc=r.filter(x=>x.status==='不合格').length,nc=r.filter(x=>x.status==='判定不可').length;
+    let html=`<div class="vbanner ${v==='合格'?'vp':'vf'}"><span class="vi">${v==='合格'?'✅':'❌'}</span><div>仕様チェック ${v}</div><div style="margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:400;">${new Date().toLocaleDateString('ja-JP')}</div></div><div class="sgrid"><div class="sc scp"><div class="slb">合格</div><div class="sv">${pc}</div></div><div class="sc scf"><div class="slb">不合格</div><div class="sv">${fc}</div></div><div class="sc"><div class="slb">判定不可</div><div class="sv" style="color:var(--text-dim)">${nc}</div></div></div>`;
+    if(parsed.summary)html+=`<div class="card"><div class="card-title">AI 所見</div><div class="acl">SPEC CHECK SUMMARY</div><div class="ai-comment">${parsed.summary}</div></div>`;
+    ra.innerHTML=html;
+  }catch(err){ra.innerHTML=`<div class="card"><div class="ai-status"><div class="ai-dot error"></div><span>エラー: ${err.message}</span></div></div>`;}
+}
+
+// ════════════════════════════════════════════════
+// DIMENSION INSPECTION
+// ════════════════════════════════════════════════
+async function runInspection(){
+  const area=document.getElementById('result-area');
+  const tol=parseFloat(document.getElementById('tolerance').value)||1.0;
+  const rows=getSpecRows();
+  if(!rows.length){area.innerHTML=`<div class="card"><div style="color:var(--fail);font-family:var(--mono);font-size:12px;">⚠ 仕様データが未入力です。</div></div>`;return;}
+  const meta={itemNo:document.getElementById('item-no').value,itemName:document.getElementById('item-name').value,size:document.getElementById('item-size').value,color:document.getElementById('item-color').value,inspector:document.getElementById('inspector').value,tol,date:new Date().toLocaleDateString('ja-JP')};
+  area.innerHTML=`<div class="card"><div class="ai-status"><div class="ai-dot thinking"></div><span>AIが写真を解析中...</span></div></div>`;
+  try{
+    const content=[];
+    dimPhotos.forEach(p=>content.push({type:'image',source:{type:'base64',media_type:p.file.type||'image/jpeg',data:p.data.split(',')[1]}}));
+    const st=rows.map((r,i)=>`${i+1}. 計測箇所:${r.part} / 方法:${r.method} / 指示寸:${r.spec!==null?r.spec+'cm':'未入力'}${r.note?' / 備考:'+r.note:''}`).join('\n');
+    content.push({type:'text',text:`プロのアパレル検品技術者として仕様書と検品写真（メジャー付き）を照合してください。品番:${meta.itemNo} 品名:${meta.itemName} サイズ:${meta.size} 許容範囲:±${tol}cm\n【仕様書】\n${st}\nJSONのみ返答:{"inspection_results":[{"item":"","spec_value":null,"actual_value":null,"diff":null,"status":"合格"or"不合格"or"判定不可","comment":""}],"overall_verdict":"合格"or"不合格"or"要確認","summary_comment":""}`});
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content}]})});
+    const data=await res.json();
+    const raw=data.content.map(c=>c.text||'').join('');
+    const clean=raw.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(clean.substring(clean.indexOf('{'),clean.lastIndexOf('}')+1));
+    dimResults={parsed,meta,tol};
+    renderDimResults(parsed,meta,tol);
+    document.getElementById('result-actions').style.display='flex';
+  }catch(err){
+    area.innerHTML=`<div class="card"><div class="ai-status"><div class="ai-dot error"></div><span>エラー: ${err.message}</span></div></div>`;
+    renderManual(rows,tol,meta);
+  }
+}
+
+function renderDimResults(parsed,meta,tol){
+  const results=parsed.inspection_results||[];const v=parsed.overall_verdict||'要確認';
+  const pc=results.filter(r=>r.status==='合格').length,fc=results.filter(r=>r.status==='不合格').length,nc=results.filter(r=>r.status==='判定不可').length;
+  let html=`<div class="vbanner ${v==='合格'?'vp':'vf'}"><span class="vi">${v==='合格'?'✅':'❌'}</span><div><div>${v==='合格'?'総合判定：合格':'総合判定：不合格'}</div><div style="font-size:11px;font-weight:400;opacity:0.8;margin-top:1px;">${meta.itemName} ${meta.size} ${meta.color}</div></div><div style="margin-left:auto;font-size:11px;font-family:var(--mono);font-weight:400;">${meta.date}${meta.inspector?' 担当:'+meta.inspector:''}</div></div>
+  <div class="sgrid"><div class="sc scp"><div class="slb">合格</div><div class="sv">${pc}</div></div><div class="sc scf"><div class="slb">不合格</div><div class="sv">${fc}</div></div><div class="sc"><div class="slb">判定不可</div><div class="sv" style="color:var(--text-dim)">${nc}</div></div></div>
+  <div class="card"><div class="card-title">寸法照合結果</div><div class="spec-wrap"><table><thead><tr><th>#</th><th>計測箇所</th><th>指示寸(cm)</th><th>実寸(cm)</th><th>差分(cm)</th><th>判定</th><th>コメント</th></tr></thead><tbody>`;
+  results.forEach((r,i)=>{
+    const d=r.diff!==null?parseFloat(r.diff):null,ad=d!==null?Math.abs(d):null;
+    const dc=ad!==null&&ad>tol?(d>0?'color:var(--warn)':'color:var(--warn)'):'color:var(--pass)';
+    const badge=r.status==='合格'?`<span class="sbadge bp">✓ 合格</span>`:r.status==='不合格'?`<span class="sbadge bf">✕ 不合格</span>`:`<span class="sbadge bw">— 不可</span>`;
+    html+=`<tr><td style="color:var(--text-muted);font-family:var(--mono)">${String(i+1).padStart(2,'0')}</td><td style="font-weight:500">${r.item}</td><td style="font-family:var(--mono);text-align:right">${r.spec_value??'—'}</td><td style="font-family:var(--mono);text-align:right">${r.actual_value??'—'}</td><td style="text-align:right;font-family:var(--mono);${dc}">${d!==null?(d>=0?'+':'')+d.toFixed(1):'—'}</td><td>${badge}</td><td style="font-size:11px;color:var(--text-dim)">${r.comment||''}</td></tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+  if(parsed.summary_comment)html+=`<div class="card"><div class="card-title">AI 総合所見</div><div class="acl">INSPECTION SUMMARY</div><div class="ai-comment">${parsed.summary_comment}</div></div>`;
+  document.getElementById('result-area').innerHTML=html;
+}
+
+function renderManual(rows,tol,meta){
+  const area=document.getElementById('result-area');
+  let html=`<div class="card"><div class="card-title">手動実寸入力モード</div><div class="spec-wrap"><table><thead><tr><th>#</th><th>計測箇所</th><th>指示寸(cm)</th><th>実寸入力(cm)</th><th>判定</th></tr></thead><tbody>`;
+  rows.forEach((r,i)=>{html+=`<tr><td style="color:var(--text-muted);font-family:var(--mono)">${String(i+1).padStart(2,'0')}</td><td style="font-weight:500">${r.part}</td><td style="font-family:var(--mono);text-align:right">${r.spec??'—'}</td><td><input type="number" step="0.1" placeholder="実寸" data-spec="${r.spec}" data-tol="${tol}" oninput="calcD(this,${i})" style="width:82px;text-align:right"></td><td id="j${i}"><span class="sbadge bw">—</span></td></tr>`;});
+  html+=`</tbody></table></div></div>`;area.innerHTML+=html;
+}
+function calcD(inp,idx){
+  const sp=parseFloat(inp.dataset.spec),tl=parseFloat(inp.dataset.tol),ac=parseFloat(inp.value);
+  const jc=document.getElementById('j'+idx);if(!jc)return;
+  if(isNaN(ac)||isNaN(sp)){jc.innerHTML=`<span class="sbadge bw">—</span>`;return;}
+  const d=ac-sp,ok=Math.abs(d)<=tl;
+  jc.innerHTML=ok?`<span class="sbadge bp">✓ 合格</span>`:`<span class="sbadge bf">✕ 不合格 (${d>=0?'+':''}${d.toFixed(1)}cm)</span>`;
+}
+
+// ════════════════════════════════════════════════
+// SUMMARY
+// ════════════════════════════════════════════════
+function buildSummary(){
+  const area=document.getElementById('sum-content');
+  const hasDim=!!dimResults,hasSpec=specItems.some(i=>i.status),hasMeasure=!!measureState.results;
+  if(!hasDim&&!hasSpec&&!hasMeasure){area.innerHTML=`<div class="empty-state"><div class="ei">📋</div>各タブで検品を実行してください</div>`;return;}
+  const meta=dimResults?.meta||{};
+  let html=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:9px;margin-bottom:18px;font-family:var(--mono);font-size:11px;">`;
+  [['品番',meta.itemNo],['品名',meta.itemName],['サイズ',meta.size],['カラー',meta.color],['担当',meta.inspector],['日付',meta.date]].forEach(([k,v])=>{if(!v)return;html+=`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:9px 11px;"><div style="color:var(--text-muted);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;">${k}</div><div style="margin-top:2px;color:var(--text)">${v}</div></div>`;});
+  html+=`</div>`;
+  if(hasMeasure){
+    html+=`<div style="margin-bottom:7px;font-family:var(--mono);font-size:10px;letter-spacing:0.12em;color:var(--accent);text-transform:uppercase;">📐 AI採寸 — ${measureState.results.measurements.length}部位</div>`;
+    html+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-bottom:16px;">`;
+    measureState.results.measurements.forEach((m,i)=>{html+=`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 11px;"><div style="font-size:9px;color:var(--text-muted);font-family:var(--mono);">${m.name}</div><div style="font-size:15px;font-weight:500;color:${MCOLORS[i%MCOLORS.length]};font-family:var(--mono);">${m.cm_length.toFixed(1)}<span style="font-size:10px;opacity:0.6"> cm</span></div></div>`;});
+    html+=`</div>`;
+  }
+  if(hasDim){const dr=dimResults.parsed.inspection_results||[];const dp=dr.filter(r=>r.status==='合格').length,df=dr.filter(r=>r.status==='不合格').length;html+=`<div style="margin-bottom:7px;font-family:var(--mono);font-size:10px;letter-spacing:0.12em;color:var(--accent);text-transform:uppercase;">📏 寸法検品 — 合格 ${dp} / 不合格 ${df}</div>`;dr.filter(r=>r.status==='不合格').forEach(r=>{html+=`<div style="padding:7px 13px;background:var(--fail-dim);border:1px solid rgba(224,82,82,0.2);border-radius:6px;margin-bottom:5px;font-size:12px;"><span style="color:var(--fail);font-family:var(--mono);">✕ ${r.item}</span> — 指示寸 ${r.spec_value??'—'}cm / 実寸 ${r.actual_value??'—'}cm / 差分 ${r.diff!==null?(parseFloat(r.diff)>=0?'+':'')+parseFloat(r.diff).toFixed(1):'—'}cm</div>`;});}
+  if(hasSpec){const sp=specItems.filter(i=>i.status==='合格').length,sf=specItems.filter(i=>i.status==='不合格').length;html+=`<div style="margin:14px 0 7px;font-family:var(--mono);font-size:10px;letter-spacing:0.12em;color:var(--accent);text-transform:uppercase;">🔍 仕様チェック — 合格 ${sp} / 不合格 ${sf}</div>`;specItems.filter(i=>i.status==='不合格').forEach(item=>{html+=`<div style="padding:7px 13px;background:var(--fail-dim);border:1px solid rgba(224,82,82,0.2);border-radius:6px;margin-bottom:5px;font-size:12px;"><span style="color:var(--fail);font-family:var(--mono);">✕ [${item.cat}] ${item.name}</span><br><span style="font-size:11px;color:var(--text-dim)">${item.spec} / ${item.note||'コメントなし'}</span></div>`;});}
+  area.innerHTML=html;
+}
+
+// ════════════════════════════════════════════════
+// CSV
+// ════════════════════════════════════════════════
+function exportCSV(type){
+  const meta={itemNo:document.getElementById('item-no').value,itemName:document.getElementById('item-name').value,size:document.getElementById('item-size').value,inspector:document.getElementById('inspector').value};
+  let rows=[],header=[];
+  if(type==='dim'&&dimResults){header=['品番','品名','サイズ','担当者','計測箇所','指示寸(cm)','実寸(cm)','差分(cm)','判定','コメント','検品日'];rows=(dimResults.parsed.inspection_results||[]).map(r=>[meta.itemNo,meta.itemName,meta.size,meta.inspector,r.item,r.spec_value??'',r.actual_value??'',r.diff??'',r.status,r.comment??'',new Date().toLocaleDateString('ja-JP')]);}
+  else if(type==='spec'){header=['品番','品名','サイズ','担当者','カテゴリ','項目名','仕様値','判定','コメント','検品日'];rows=specItems.map(i=>[meta.itemNo,meta.itemName,meta.size,meta.inspector,i.cat,i.name,i.spec,i.status,i.note,new Date().toLocaleDateString('ja-JP')]);}
+  if(!rows.length){alert('出力データがありません');return;}
+  dl([header,...rows],`検品_${type}_${meta.itemNo||'RUDDERS'}_${new Date().toISOString().slice(0,10)}.csv`);
+}
+function exportAll(){
+  const meta={itemNo:document.getElementById('item-no').value,itemName:document.getElementById('item-name').value,size:document.getElementById('item-size').value,inspector:document.getElementById('inspector').value};
+  const h=['種別','品番','品名','サイズ','担当者','箇所/項目','仕様値','実寸','差分','判定','コメント','検品日'];const rows=[];
+  if(measureState.results) measureState.results.measurements.forEach(m=>rows.push(['採寸',meta.itemNo,meta.itemName,meta.size,meta.inspector,m.name,'',m.cm_length.toFixed(1),'',m.confidence,m.note||'',new Date().toLocaleDateString('ja-JP')]));
+  if(dimResults)(dimResults.parsed.inspection_results||[]).forEach(r=>rows.push(['寸法',meta.itemNo,meta.itemName,meta.size,meta.inspector,r.item,r.spec_value??'',r.actual_value??'',r.diff??'',r.status,r.comment??'',new Date().toLocaleDateString('ja-JP')]));
+  specItems.forEach(i=>rows.push(['仕様',meta.itemNo,meta.itemName,meta.size,meta.inspector,`[${i.cat}] ${i.name}`,i.spec,'','',i.status||'未判定',i.note,new Date().toLocaleDateString('ja-JP')]));
+  if(!rows.length){alert('出力データがありません');return;}
+  dl([h,...rows],`総合検品_${meta.itemNo||'RUDDERS'}_${new Date().toISOString().slice(0,10)}.csv`);
+}
+function dl(data,fname){
+  const csv='\uFEFF'+data.map(r=>r.map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));a.download=fname;a.click();
+}
+
+// ════════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════════
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// ════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════
+initPartsGrid();
+loadPreset('tshirt');
+</script>
+</body>
+</html>
